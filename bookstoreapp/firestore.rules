@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Function check for Admin role (0)
+    function isAdmin() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 0;
+    }
+
+    // 1. Users collection: Only auth user can read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      match /cart/{cartItemId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // 2. Books collection:
+    // Read: Anyone can read
+    // Write: ONLY Admins (role: 0) can write
+    match /books/{bookId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // 3. Orders collection:
+    // Read: User can read their own orders or Admins
+    match /orders/{orderId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+  }
+}
